@@ -16,7 +16,7 @@ then
     then
         echo "Setting the linker to linux-musl-gcc"
         mkdir ./.cargo
-        cat << eos > ./.cargo/config
+        cat << eos >> ./.cargo/config
 [target.x86_64-unknown-linux-musl]
 linker = "x86_64-linux-musl-gcc"
 eos
