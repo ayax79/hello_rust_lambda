@@ -13,6 +13,12 @@ log = "^0.4"
 simple_logger = "^1"
 rusoto_core = "0.35"
 rusoto_dynamodb = "0.35"
+rusoto_credential = "0.14"
+
+[dev-dependencies]
+testcontainers = "0.3.1"
+dynamodb_testcontainer = "0.1.0"
+pretty_env_logger = "0.2"
 
 [[bin]]
 name = "bootstrap"
