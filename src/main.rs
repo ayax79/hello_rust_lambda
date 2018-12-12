@@ -4,7 +4,7 @@ extern crate lambda_runtime as lambda;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
-extern crate simple_logger;
+extern crate env_logger;
 extern crate rusoto_core;
 extern crate rusoto_dynamodb;
 extern crate rusoto_credential;
@@ -29,7 +29,8 @@ const DEFAULT_REGION_NAME: &'static str = "local";
 const DEFAULT_REGION_ENDPOINT: &'static str = "http://localhost:8000";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    simple_logger::init_with_level(log::Level::Info)?;
+    env_logger::try_init()?;
+
     lambda!(my_handler);
     Ok(())
 }
@@ -37,15 +38,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn my_handler(event: CustomEvent, c: lambda::Context) -> Result<CustomOutput, HandlerError> {
     validate(&event, &c)
         .and_then(|e| {
-            let mut dao = HelloDAO::new(determine_region());
-            dao.put(e).sync()
+            let region = determine_region();
+            debug!("Configuring Dynamo client with region {:?}", &region);
+            let mut dao = HelloDAO::new(region);
+            dao.put(e)
                 .map_err(|e| {
-                    error!("Error putting item: {:?}", e);
                     c.new_error(e.description())
                 })
-                .map(|_| e)
+                .map(|_| CustomOutput::new(format!("Hello {}", e.first_name)))
         })
-        .map(|e| CustomOutput::new(format!("Hello {}", e.first_name)))
 }
 
 fn validate<'a>(e: &'a CustomEvent, c: &lambda::Context) -> Result<&'a CustomEvent, HandlerError> {
@@ -67,13 +68,14 @@ fn determine_region() -> Region {
     env::var(DYNAMO_REGION_ENV_KEY)
         .map(|reg| {
             let trimmed = reg.trim();
-            let result = Region::from_str(trimmed.as_ref());
+            debug!("Attempting to acquire region for string {} ", trimmed);
+            let result = Region::from_str(trimmed);
             if let &Err(_) = &result {
                 warn!("Could not parse dynamo region of {} returning local.", reg);
             }
             result.unwrap_or(default_region())
         })
-        .unwrap_or({
+        .unwrap_or_else(|_| {
             warn!("No dynamo region was specified in env variable {} returning default", DYNAMO_REGION_ENV_KEY);
             default_region()
         })

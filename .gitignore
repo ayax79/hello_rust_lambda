@@ -3,4 +3,5 @@
 .idea
 Cargo.lock
 *.zip
-
+.env
+test-output.json

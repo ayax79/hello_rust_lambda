@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use rusoto_core::{
     Region,
-    RusotoFuture,
     HttpClient,
 };
 use rusoto_dynamodb::{
@@ -36,8 +35,12 @@ impl HelloDAO {
         }
     }
 
-    pub fn put(&mut self, event: &CustomEvent) -> RusotoFuture<PutItemOutput, PutItemError> {
-        self.client.put_item(event.into())
+    pub fn put(&mut self, event: &CustomEvent) -> Result<PutItemOutput, PutItemError> {
+        self.client.put_item(event.into()).sync()
+            .map_err(|e| {
+                log_put_item_error(event, &e);
+                e
+            })
     }
 }
 
@@ -77,6 +80,17 @@ fn build_local_dynamodb_client(region: &Region) -> DynamoDbClient {
     DynamoDbClient::new_with(dispatcher, credentials_provider, region.clone())
 }
 
+fn log_put_item_error(event: &CustomEvent, e: &PutItemError) {
+    match e {
+        // if we received an unknown error, we will need to parse it to log it appropriately
+        &PutItemError::Unknown(ref response) => {
+            let body_as_string = String::from_utf8(response.body.clone()).unwrap_or("".to_string());
+            error!("Unknown error putting event {:?} with error response body of {:?}", event, body_as_string)
+        }
+        _ => error!("Error putting event: {:?} : error {:?}", event, e)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate testcontainers;
@@ -88,7 +102,7 @@ mod tests {
         CreateTableInput,
         KeySchemaElement,
         AttributeDefinition,
-        ProvisionedThroughput
+        ProvisionedThroughput,
     };
 
     use super::*;
@@ -103,7 +117,7 @@ mod tests {
 
         let region = Region::Custom {
             name: "local".to_string(),
-            endpoint: format!("http://localhost:{}", host_port)
+            endpoint: format!("http://localhost:{}", host_port),
         };
         let mut hello_dao = HelloDAO::new(region);
         create_table(&hello_dao.client);
@@ -111,10 +125,10 @@ mod tests {
         let event = CustomEvent {
             email: "foo@bar.com".to_string(),
             first_name: "Foo".to_string(),
-            last_name: "Bar".to_string()
+            last_name: "Bar".to_string(),
         };
 
-        let result = hello_dao.put(&event).sync();
+        let result = hello_dao.put(&event);
         if let &Err(ref e) = &result {
             error!("create error: {:#?}", e);
         }
@@ -147,7 +161,6 @@ mod tests {
         }
         assert!(result.is_ok());
     }
-
 }
 
 
