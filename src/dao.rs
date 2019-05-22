@@ -1,60 +1,55 @@
-use std::convert::Into;
 use std::collections::HashMap;
+use std::convert::Into;
+use std::error::Error;
 
-use rusoto_core::{
-    Region,
-    HttpClient,
-};
-use rusoto_dynamodb::{
-    DynamoDb,
-    DynamoDbClient,
-    PutItemInput,
-    AttributeValue,
-    PutItemOutput,
-    PutItemError,
-};
-use model::CustomEvent;
+use crate::errors::HelloError;
+use crate::model::CustomEvent;
+use rusoto_core::RusotoError;
+use rusoto_core::{HttpClient, Region};
 use rusoto_credential::StaticProvider;
+use rusoto_dynamodb::{AttributeValue, DynamoDb, DynamoDbClient, PutItemInput, PutItemOutput};
 
 const TABLE_NAME: &'static str = "hello_events";
 
 pub struct HelloDAO {
-    client: DynamoDbClient
+    client: DynamoDbClient,
 }
 
 impl HelloDAO {
     pub fn new(region: Region) -> Self {
         let client = match region {
-            Region::Custom { name: ref n, endpoint: _ } if n == super::DEFAULT_REGION_NAME =>
-                build_local_dynamodb_client(&region),
-            _ => DynamoDbClient::new(region)
+            Region::Custom {
+                name: ref n,
+                endpoint: _,
+            } if n == super::DEFAULT_REGION_NAME => build_local_dynamodb_client(&region),
+            _ => DynamoDbClient::new(region),
         };
 
-        HelloDAO {
-            client
-        }
+        HelloDAO { client }
     }
 
-    pub fn put(&mut self, event: &CustomEvent) -> Result<PutItemOutput, PutItemError> {
-        self.client.put_item(event.into()).sync()
-            .map_err(|e| {
-                log_put_item_error(event, &e);
-                e
-            })
+    pub fn put(&mut self, event: &CustomEvent) -> Result<PutItemOutput, HelloError> {
+        self.client.put_item(event.into()).sync().map_err(|e| {
+            log_rusoto_error(event, &e);
+            HelloError::from(e)
+        })
     }
 }
-
 
 impl<'a> Into<PutItemInput> for &'a CustomEvent {
     fn into(self) -> PutItemInput {
         let mut item = PutItemInput::default();
         item.item = [
             ("email".to_string(), from_string(self.email.clone())),
-            ("first_name".to_string(), from_string(self.first_name.clone())),
-            ("last_name".to_string(), from_string(self.last_name.clone()))]
-            .iter()
-            .cloned()
-            .collect::<HashMap<String, AttributeValue>>();
+            (
+                "first_name".to_string(),
+                from_string(self.first_name.clone()),
+            ),
+            ("last_name".to_string(), from_string(self.last_name.clone())),
+        ]
+        .iter()
+        .cloned()
+        .collect::<HashMap<String, AttributeValue>>();
         item.table_name = TABLE_NAME.to_string();
         item
     }
@@ -67,46 +62,42 @@ fn from_string(s: String) -> AttributeValue {
 }
 
 fn build_local_dynamodb_client(region: &Region) -> DynamoDbClient {
-    let credentials_provider = StaticProvider::new(
-        "fakeKey".to_string(),
-        "fakeSecret".to_string(),
-        None,
-        None);
+    let credentials_provider =
+        StaticProvider::new("fakeKey".to_string(), "fakeSecret".to_string(), None, None);
 
-    let dispatcher = HttpClient::new()
-        .expect("could not create http client");
+    let dispatcher = HttpClient::new().expect("could not create http client");
 
     info!("Creating local connection with region {:#?}", region);
     DynamoDbClient::new_with(dispatcher, credentials_provider, region.clone())
 }
 
-fn log_put_item_error(event: &CustomEvent, e: &PutItemError) {
+fn log_rusoto_error<E: Error + 'static>(event: &CustomEvent, e: &RusotoError<E>) {
     match e {
         // if we received an unknown error, we will need to parse it to log it appropriately
-        &PutItemError::Unknown(ref response) => {
-            let body_as_string = String::from_utf8(response.body.clone()).unwrap_or("".to_string());
-            error!("Unknown error putting event {:?} with error response body of {:?}", event, body_as_string)
+        &RusotoError::Unknown(ref response) => {
+            let body_as_string = response.body_as_str();
+            error!(
+                "Unknown error putting event {:?} with error response body of {:?}",
+                event, body_as_string
+            )
         }
-        _ => error!("Error putting event: {:?} : error {:?}", event, e)
+        _ => error!("Error putting event: {:?} : error {}", event, e),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    extern crate testcontainers;
     extern crate dynamodb_testcontainer;
     extern crate pretty_env_logger;
+    extern crate testcontainers;
 
     use rusoto_core::Region;
     use rusoto_dynamodb::{
-        CreateTableInput,
-        KeySchemaElement,
-        AttributeDefinition,
-        ProvisionedThroughput,
+        AttributeDefinition, CreateTableInput, KeySchemaElement, ProvisionedThroughput,
     };
 
-    use super::*;
     use self::testcontainers::*;
+    use super::*;
 
     #[test]
     fn test_put_get() {
@@ -162,6 +153,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-
-
-

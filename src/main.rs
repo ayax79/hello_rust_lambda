@@ -4,25 +4,24 @@ extern crate lambda_runtime as lambda;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-extern crate rusoto_core;
-extern crate rusoto_dynamodb;
-extern crate rusoto_credential;
+// extern crate env_logger;
+// extern crate rusoto_core;
+// extern crate rusoto_dynamodb;
+// extern crate rusoto_credential;
 
 mod dao;
+mod errors;
 mod model;
 
-use std::error::Error;
-use std::env;
-use std::str::FromStr;
 use lambda::error::HandlerError;
 use rusoto_core::Region;
+use simple_error::bail;
+use std::env;
+use std::error::Error;
+use std::str::FromStr;
 
-use model::{
-    CustomEvent,
-    CustomOutput,
-};
 use dao::HelloDAO;
+use model::{CustomEvent, CustomOutput};
 
 const DYNAMO_REGION_ENV_KEY: &'static str = "DYNAMO_REGION";
 const DEFAULT_REGION_NAME: &'static str = "local";
@@ -36,29 +35,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn my_handler(event: CustomEvent, c: lambda::Context) -> Result<CustomOutput, HandlerError> {
-    validate(&event, &c)
-        .and_then(|e| {
-            let region = determine_region();
-            debug!("Configuring Dynamo client with region {:?}", &region);
-            let mut dao = HelloDAO::new(region);
-            dao.put(e)
-                .map_err(|e| {
-                    c.new_error(e.description())
-                })
-                .map(|_| CustomOutput::new(format!("Hello {}", e.first_name)))
-        })
+    validate(&event, &c).and_then(|e| {
+        let region = determine_region();
+        debug!("Configuring Dynamo client with region {:?}", &region);
+        let mut dao = HelloDAO::new(region);
+        dao.put(e)
+            .map_err(|e| e.into())
+            .map(|_| CustomOutput::new(format!("Hello {}", e.first_name)))
+    })
 }
 
 fn validate<'a>(e: &'a CustomEvent, c: &lambda::Context) -> Result<&'a CustomEvent, HandlerError> {
     if e.email.is_empty() {
         error!("Empty email in request {}", c.aws_request_id);
-        Err(c.new_error("Empty email"))
+        bail!("Empty email")
     } else if e.first_name.is_empty() {
         error!("Empty first name in request {}", c.aws_request_id);
-        Err(c.new_error("Empty First Name"))
+        bail!("Empty First Name")
     } else if e.last_name.is_empty() {
         error!("Empty last name in request {}", c.aws_request_id);
-        Err(c.new_error("Empty Last Name"))
+        bail!("Empty Last Name")
     } else {
         Ok(e)
     }
@@ -76,7 +72,10 @@ fn determine_region() -> Region {
             result.unwrap_or(default_region())
         })
         .unwrap_or_else(|_| {
-            warn!("No dynamo region was specified in env variable {} returning default", DYNAMO_REGION_ENV_KEY);
+            warn!(
+                "No dynamo region was specified in env variable {} returning default",
+                DYNAMO_REGION_ENV_KEY
+            );
             default_region()
         })
 }
@@ -84,7 +83,7 @@ fn determine_region() -> Region {
 fn default_region() -> Region {
     Region::Custom {
         name: DEFAULT_REGION_NAME.to_string(),
-        endpoint: DEFAULT_REGION_ENDPOINT.to_string()
+        endpoint: DEFAULT_REGION_ENDPOINT.to_string(),
     }
 }
 
@@ -122,6 +121,5 @@ mod tests {
         let r2 = determine_region();
         assert_eq!(Region::UsWest2, r2)
     }
-
 
 }
