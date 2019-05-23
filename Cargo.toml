@@ -19,7 +19,6 @@ simple-error = "0.1"
 
 [dev-dependencies]
 testcontainers = "0.7"
-dynamodb_testcontainer = "0.1.0"
 pretty_env_logger = "0.2"
 
 [[bin]]

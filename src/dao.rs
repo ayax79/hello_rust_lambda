@@ -87,23 +87,24 @@ fn log_rusoto_error<E: Error + 'static>(event: &CustomEvent, e: &RusotoError<E>)
 
 #[cfg(test)]
 mod tests {
-    extern crate dynamodb_testcontainer;
+    // extern crate dynamodb_testcontainer;
     extern crate pretty_env_logger;
     extern crate testcontainers;
 
     use rusoto_core::Region;
     use rusoto_dynamodb::{
-        AttributeDefinition, CreateTableInput, KeySchemaElement, ProvisionedThroughput,
+        AttributeDefinition, CreateTableInput, KeySchemaElement, ProvisionedThroughput, DynamoDb
     };
 
     use self::testcontainers::*;
+    use self::testcontainers::images::dynamodb_local::DynamoDb as DynamoDbImage;
     use super::*;
 
     #[test]
     fn test_put_get() {
         let _ = pretty_env_logger::try_init();
         let docker = clients::Cli::default();
-        let node = docker.run(dynamodb_testcontainer::DynamoDb::default());
+        let node = docker.run(DynamoDbImage::default());
         let host_port = node.get_host_port(8000).unwrap();
 
         let region = Region::Custom {
@@ -143,7 +144,7 @@ mod tests {
         let mut provisioned_throughput = ProvisionedThroughput::default();
         provisioned_throughput.read_capacity_units = 5;
         provisioned_throughput.write_capacity_units = 5;
-        input.provisioned_throughput = provisioned_throughput;
+        input.provisioned_throughput = Some(provisioned_throughput);
 
         let result = client.create_table(input).sync();
 
