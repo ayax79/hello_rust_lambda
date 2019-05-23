@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomEvent {

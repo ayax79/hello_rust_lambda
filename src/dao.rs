@@ -4,6 +4,7 @@ use std::error::Error;
 
 use crate::errors::HelloError;
 use crate::model::CustomEvent;
+use log::{error, info};
 use rusoto_core::RusotoError;
 use rusoto_core::{HttpClient, Region};
 use rusoto_credential::StaticProvider;
@@ -88,16 +89,16 @@ fn log_rusoto_error<E: Error + 'static>(event: &CustomEvent, e: &RusotoError<E>)
 #[cfg(test)]
 mod tests {
     // extern crate dynamodb_testcontainer;
-    extern crate pretty_env_logger;
-    extern crate testcontainers;
+    use pretty_env_logger;
+    use testcontainers;
 
     use rusoto_core::Region;
     use rusoto_dynamodb::{
-        AttributeDefinition, CreateTableInput, KeySchemaElement, ProvisionedThroughput, DynamoDb
+        AttributeDefinition, CreateTableInput, DynamoDb, KeySchemaElement, ProvisionedThroughput,
     };
 
-    use self::testcontainers::*;
     use self::testcontainers::images::dynamodb_local::DynamoDb as DynamoDbImage;
+    use self::testcontainers::*;
     use super::*;
 
     #[test]

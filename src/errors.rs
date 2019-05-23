@@ -1,8 +1,8 @@
+use lambda_runtime::error::{HandlerError, LambdaErrorExt};
 use rusoto_core::RusotoError;
 use std::convert::{From, Into};
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use lambda_runtime::error::{HandlerError, LambdaErrorExt};
 
 #[derive(Debug)]
 pub enum HelloError {
@@ -10,7 +10,7 @@ pub enum HelloError {
 }
 
 impl Display for HelloError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             &HelloError::DbError(ref msg) => write!(f, "{}", msg),
         }
@@ -22,7 +22,7 @@ impl Error for HelloError {}
 impl LambdaErrorExt for HelloError {
     fn error_type(&self) -> &str {
         match *self {
-            HelloError::DbError(_) => "DatabaseError"
+            HelloError::DbError(_) => "DatabaseError",
         }
     }
 }
@@ -34,9 +34,7 @@ impl<E: Error + 'static> From<RusotoError<E>> for HelloError {
 }
 
 impl Into<HandlerError> for HelloError {
-
     fn into(self) -> HandlerError {
-         HandlerError::new(self)
+        HandlerError::new(self)
     }
-
 }

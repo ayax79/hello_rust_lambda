@@ -1,27 +1,17 @@
-#[macro_use]
-extern crate lambda_runtime as lambda;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate log;
-// extern crate env_logger;
-// extern crate rusoto_core;
-// extern crate rusoto_dynamodb;
-// extern crate rusoto_credential;
-
 mod dao;
 mod errors;
 mod model;
 
-use lambda::error::HandlerError;
+use lambda_runtime::{error::HandlerError, lambda, Context};
+use log::{debug, error, warn};
 use rusoto_core::Region;
 use simple_error::bail;
 use std::env;
 use std::error::Error;
 use std::str::FromStr;
 
-use dao::HelloDAO;
-use model::{CustomEvent, CustomOutput};
+use crate::dao::HelloDAO;
+use crate::model::{CustomEvent, CustomOutput};
 
 const DYNAMO_REGION_ENV_KEY: &'static str = "DYNAMO_REGION";
 const DEFAULT_REGION_NAME: &'static str = "local";
@@ -34,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn my_handler(event: CustomEvent, c: lambda::Context) -> Result<CustomOutput, HandlerError> {
+fn my_handler(event: CustomEvent, c: Context) -> Result<CustomOutput, HandlerError> {
     validate(&event, &c).and_then(|e| {
         let region = determine_region();
         debug!("Configuring Dynamo client with region {:?}", &region);
@@ -45,7 +35,7 @@ fn my_handler(event: CustomEvent, c: lambda::Context) -> Result<CustomOutput, Ha
     })
 }
 
-fn validate<'a>(e: &'a CustomEvent, c: &lambda::Context) -> Result<&'a CustomEvent, HandlerError> {
+fn validate<'a>(e: &'a CustomEvent, c: &Context) -> Result<&'a CustomEvent, HandlerError> {
     if e.email.is_empty() {
         error!("Empty email in request {}", c.aws_request_id);
         bail!("Empty email")
@@ -94,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_validate() {
-        let context = lambda::Context::default();
+        let context = Context::default();
         let e0 = CustomEvent::new("sldkfj@sldfkj.com", "", "Blah");
         assert!(validate(&e0, &context).is_err());
         let e1 = CustomEvent::new("", "sdfl", "slkjdf");
